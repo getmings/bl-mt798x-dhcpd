@@ -14,6 +14,13 @@ const AUTHOR_DISPLAY = "💡Yuzhii";
 const GITHUB_USER_URL = "https://github.com/Yuzhii0718/";
 const PROJECT_REPO_URL = "https://github.com/Yuzhii0718/bl-mt798x-dhcpd";
 
+// Single global state container (defined eagerly so early helpers can read it).
+var APP_STATE = {
+    lang: "en",
+    theme: "auto",
+    page: "",
+};
+
 function normalizeLang(input) {
     if (!input) return "en";
     const lowerCaseLanguage = String(input).toLowerCase();
@@ -21,26 +28,22 @@ function normalizeLang(input) {
 }
 
 function detectLang() {
-    let storedLang, navigatorLanguages;
     try {
-        storedLang = localStorage.getItem("lang");
+        const storedLang = localStorage.getItem("lang");
         if (storedLang) return normalizeLang(storedLang);
-    } catch (error) { }
-    navigatorLanguages = [];
-    if (navigator.languages && navigator.languages.length) {
-        navigatorLanguages = navigator.languages;
-    } else if (navigator.language) {
-        navigatorLanguages = [navigator.language];
-    }
-    return normalizeLang(navigatorLanguages[0]);
+    } catch { /* ignore */ }
+    const candidates = navigator.languages?.length
+        ? navigator.languages
+        : (navigator.language ? [navigator.language] : []);
+    return normalizeLang(candidates[0]);
 }
 
 function detectTheme() {
     try {
-        const storedTheme = localStorage.getItem("theme");
-        if (storedTheme) return storedTheme;
-    } catch (error) { }
-    return "auto";
+        return localStorage.getItem("theme") ?? "auto";
+    } catch {
+        return "auto";
+    }
 }
 
 function normalizeThemeMode(input) {
@@ -59,46 +62,45 @@ function isI18nEnabled() {
 
 function t(key, fallback) {
     const languageCode = APP_STATE.lang || "en";
-    if (!isI18nEnabled() || !isI18nAvailable())
-        return fallback !== undefined ? fallback : key;
-    return I18N[languageCode] && I18N[languageCode][key] !== undefined ? I18N[languageCode][key] : I18N.en && I18N.en[key] !== undefined ? I18N.en[key] : (fallback !== undefined ? fallback : key);
+    const defaultValue = fallback !== undefined ? fallback : key;
+    if (!isI18nEnabled() || !isI18nAvailable()) return defaultValue;
+    return I18N[languageCode]?.[key] ?? I18N.en?.[key] ?? defaultValue;
 }
 
 function applyI18n(rootNode) {
     const scope = rootNode || document;
     const enabled = isI18nEnabled() && isI18nAvailable();
-    const textNodes = scope.querySelectorAll("[data-i18n]");
-    for (let textIndex = 0; textIndex < textNodes.length; textIndex++) {
-        const textNode = textNodes[textIndex];
-        const key = textNode.getAttribute("data-i18n");
-        if (!textNode.hasAttribute("data-i18n-fallback"))
-            textNode.setAttribute("data-i18n-fallback", textNode.textContent || "");
-        const fallbackText = textNode.getAttribute("data-i18n-fallback") || "";
-        textNode.textContent = enabled ? t(key, fallbackText) : fallbackText;
+
+    for (const node of scope.querySelectorAll("[data-i18n]")) {
+        const key = node.getAttribute("data-i18n");
+        if (!node.hasAttribute("data-i18n-fallback")) {
+            node.setAttribute("data-i18n-fallback", node.textContent || "");
+        }
+        const fallback = node.getAttribute("data-i18n-fallback") || "";
+        node.textContent = enabled ? t(key, fallback) : fallback;
     }
-    const htmlNodes = scope.querySelectorAll("[data-i18n-html]");
-    for (let htmlIndex = 0; htmlIndex < htmlNodes.length; htmlIndex++) {
-        const htmlNode = htmlNodes[htmlIndex];
-        const htmlKey = htmlNode.getAttribute("data-i18n-html");
-        if (!htmlNode.hasAttribute("data-i18n-html-fallback"))
-            htmlNode.setAttribute("data-i18n-html-fallback", htmlNode.innerHTML || "");
-        const fallbackHtml = htmlNode.getAttribute("data-i18n-html-fallback") || "";
-        htmlNode.innerHTML = enabled ? t(htmlKey, fallbackHtml) : fallbackHtml;
+
+    for (const node of scope.querySelectorAll("[data-i18n-html]")) {
+        const key = node.getAttribute("data-i18n-html");
+        if (!node.hasAttribute("data-i18n-html-fallback")) {
+            node.setAttribute("data-i18n-html-fallback", node.innerHTML || "");
+        }
+        const fallback = node.getAttribute("data-i18n-html-fallback") || "";
+        node.innerHTML = enabled ? t(key, fallback) : fallback;
     }
-    const attributeNodes = scope.querySelectorAll("[data-i18n-attr]");
-    for (let attrIndex = 0; attrIndex < attributeNodes.length; attrIndex++) {
-        const attributeNode = attributeNodes[attrIndex];
-        const attributeSpec = attributeNode.getAttribute("data-i18n-attr");
-        if (!attributeSpec) continue;
-        const attributeParts = attributeSpec.split(":");
-        if (attributeParts.length < 2) continue;
-        const attributeName = attributeParts[0];
-        const translationKey = attributeParts.slice(1).join(":");
-        const fallbackKey = "data-i18n-attr-fallback-" + attributeName;
-        if (!attributeNode.hasAttribute(fallbackKey))
-            attributeNode.setAttribute(fallbackKey, attributeNode.getAttribute(attributeName) || "");
-        const fallbackAttribute = attributeNode.getAttribute(fallbackKey) || "";
-        attributeNode.setAttribute(attributeName, enabled ? t(translationKey, fallbackAttribute) : fallbackAttribute);
+
+    for (const node of scope.querySelectorAll("[data-i18n-attr]")) {
+        const spec = node.getAttribute("data-i18n-attr");
+        if (!spec) continue;
+        const [attrName, ...keyParts] = spec.split(":");
+        if (!attrName || keyParts.length === 0) continue;
+        const key = keyParts.join(":");
+        const fallbackKey = `data-i18n-attr-fallback-${attrName}`;
+        if (!node.hasAttribute(fallbackKey)) {
+            node.setAttribute(fallbackKey, node.getAttribute(attrName) || "");
+        }
+        const fallback = node.getAttribute(fallbackKey) || "";
+        node.setAttribute(attrName, enabled ? t(key, fallback) : fallback);
     }
 }
 
@@ -106,11 +108,11 @@ function setLang(language) {
     APP_STATE.lang = normalizeLang(language);
     try {
         localStorage.setItem("lang", APP_STATE.lang);
-    } catch (error) { }
+    } catch { /* ignore */ }
     applyI18n(document);
-    typeof backupRefreshI18n == "function" && APP_STATE.page === "backup" && backupRefreshI18n();
-    typeof flashRefreshI18n == "function" && APP_STATE.page === "flash" && flashRefreshI18n();
-    typeof renderSysInfo == "function" && renderSysInfo();
+    if (APP_STATE.page === "backup" && typeof backupRefreshI18n === "function") backupRefreshI18n();
+    if (APP_STATE.page === "flash"  && typeof flashRefreshI18n  === "function") flashRefreshI18n();
+    if (typeof renderSysInfo === "function") renderSysInfo();
     updateDocumentTitle();
 }
 
@@ -120,37 +122,45 @@ function updateThemeSelect() {
     themeSelect.value = APP_STATE.theme || "auto";
 }
 
-function setTheme(themeMode, options) {
-    const resolvedOptions = options || {};
-    const persistLocal = resolvedOptions.persistLocal !== false;
-    const persistEnv = resolvedOptions.persistEnv === true;
-    const silent = resolvedOptions.silent === true;
+function setTheme(themeMode, options = {}) {
+    const { persistLocal = true, persistEnv = false, silent = false } = options;
     APP_STATE.theme = normalizeThemeMode(themeMode || "auto");
-    try {
-        persistLocal && localStorage.setItem("theme", APP_STATE.theme);
-    } catch (error) { }
-    const rootElement = document.documentElement;
-    if (window.__failsafeThemeApplyMode) {
-        window.__failsafeThemeApplyMode(APP_STATE.theme, { silent: silent });
-    } else {
-        APP_STATE.theme === "auto" ? rootElement.removeAttribute("data-theme") : rootElement.setAttribute("data-theme", APP_STATE.theme);
+
+    if (persistLocal) {
+        try { localStorage.setItem("theme", APP_STATE.theme); }
+        catch { /* ignore */ }
     }
+
+    const rootElement = document.documentElement;
+    if (typeof window.__failsafeThemeApplyMode === "function") {
+        window.__failsafeThemeApplyMode(APP_STATE.theme, { silent });
+    } else if (APP_STATE.theme === "auto") {
+        rootElement.removeAttribute("data-theme");
+    } else {
+        rootElement.setAttribute("data-theme", APP_STATE.theme);
+    }
+
     updateThemeSelect();
-    persistEnv && saveThemeMode(APP_STATE.theme);
+    if (persistEnv) saveThemeMode(APP_STATE.theme);
 }
 
 const THEME_COLOR_ENV_KEY = "failsafe_theme_color";
 const THEME_COLOR_CACHE_KEY = "failsafe_theme_color_cache";
-const ACCENT_PRESETS = ["#2563eb", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#a855f7"];
+const ACCENT_PRESETS = ["#2563eb", "#0ea5e9", "#14b8a6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#a855f7"];
 const THEME_MODE_ENV_KEY = "failsafe_theme_mode";
 
+const HEX3_RE = /^[0-9a-fA-F]{3}$/;
+const HEX6_RE = /^[0-9a-fA-F]{6}$/;
+
 function normalizeHexColor(input) {
-    if (!input) return null;
+    if (input == null) return null;
     let value = String(input).trim();
-    if (value === "") return null;
+    if (!value) return null;
     if (value[0] === "#") value = value.slice(1);
-    if (!/^[0-9a-fA-F]{3}$/.test(value) && !/^[0-9a-fA-F]{6}$/.test(value)) return null;
-    const hex = value.length === 3 ? `#${value[0]}${value[0]}${value[1]}${value[1]}${value[2]}${value[2]}` : `#${value}`;
+    if (!HEX3_RE.test(value) && !HEX6_RE.test(value)) return null;
+    const hex = value.length === 3
+        ? `#${value[0]}${value[0]}${value[1]}${value[1]}${value[2]}${value[2]}`
+        : `#${value}`;
     return hex.toLowerCase();
 }
 
@@ -160,34 +170,30 @@ function hexToRgb(hex) {
     return {
         r: parseInt(normalizedHex.slice(1, 3), 16),
         g: parseInt(normalizedHex.slice(3, 5), 16),
-        b: parseInt(normalizedHex.slice(5, 7), 16)
+        b: parseInt(normalizedHex.slice(5, 7), 16),
     };
 }
 
 function applyAccentVars(color) {
     const normalizedColor = normalizeHexColor(color);
-    let rgb;
-    let lighter;
     if (!normalizedColor) return false;
-    rgb = hexToRgb(normalizedColor);
+    const rgb = hexToRgb(normalizedColor);
     if (!rgb) return false;
-    const rootElement = document.documentElement;
-    rootElement.style.setProperty("--primary", normalizedColor);
-    rootElement.style.setProperty("--primary-rgb", `${rgb.r}, ${rgb.g}, ${rgb.b}`);
-    lighter = blendColor(normalizedColor, "#ffffff", 0.28);
-    rootElement.style.setProperty("--primary-2", lighter);
+
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty("--primary", normalizedColor);
+    rootStyle.setProperty("--primary-rgb", `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+    rootStyle.setProperty("--primary-2", blendColor(normalizedColor, "#ffffff", 0.28));
     ensureThemeColorMeta(normalizedColor);
     return true;
 }
 
 function blendColor(sourceHex, targetHex, ratio) {
-    const sourceRgb = hexToRgb(sourceHex);
-    const targetRgb = hexToRgb(targetHex);
-    if (!sourceRgb || !targetRgb) return sourceHex;
-    const red = Math.round(sourceRgb.r + (targetRgb.r - sourceRgb.r) * ratio);
-    const green = Math.round(sourceRgb.g + (targetRgb.g - sourceRgb.g) * ratio);
-    const blue = Math.round(sourceRgb.b + (targetRgb.b - sourceRgb.b) * ratio);
-    return `#${red.toString(16).padStart(2, "0")}${green.toString(16).padStart(2, "0")}${blue.toString(16).padStart(2, "0")}`;
+    const a = hexToRgb(sourceHex);
+    const b = hexToRgb(targetHex);
+    if (!a || !b) return sourceHex;
+    const mix = (x, y) => Math.round(x + (y - x) * ratio).toString(16).padStart(2, "0");
+    return `#${mix(a.r, b.r)}${mix(a.g, b.g)}${mix(a.b, b.b)}`;
 }
 
 function ensureThemeColorMeta(color) {
@@ -196,25 +202,21 @@ function ensureThemeColorMeta(color) {
     if (!meta) {
         meta = document.createElement("meta");
         meta.setAttribute("name", "theme-color");
-        document.head && document.head.appendChild(meta);
+        document.head?.appendChild(meta);
     }
     meta.setAttribute("content", color);
 }
 
 function updateAccentControls(color) {
-    const colorPicker = document.getElementById("accent_color_picker");
-    const colorInput = document.getElementById("accent_color_input");
     const normalizedColor = normalizeHexColor(color);
+    const colorPicker = document.getElementById("accent_color_picker");
+    const colorInput  = document.getElementById("accent_color_input");
     if (colorPicker && normalizedColor) colorPicker.value = normalizedColor;
-    if (colorInput && normalizedColor) colorInput.value = normalizedColor;
-    const swatches = document.querySelectorAll(".color-swatch");
-    for (let swatchIndex = 0; swatchIndex < swatches.length; swatchIndex++) {
-        const swatch = swatches[swatchIndex];
-        if (!swatch || !swatch.dataset) continue;
-        if (normalizedColor && String(swatch.dataset.color || "").toLowerCase() === normalizedColor)
-            swatch.classList.add("active");
-        else
-            swatch.classList.remove("active");
+    if (colorInput  && normalizedColor) colorInput.value  = normalizedColor;
+
+    for (const swatch of document.querySelectorAll(".color-swatch")) {
+        const presetColor = String(swatch.dataset?.color ?? "").toLowerCase();
+        swatch.classList.toggle("active", !!normalizedColor && presetColor === normalizedColor);
     }
 }
 
@@ -225,36 +227,32 @@ function applyAccentColor(color) {
     return true;
 }
 
-(function applyAccentFromCache() {
-    try {
-        const cachedColor = localStorage.getItem(THEME_COLOR_CACHE_KEY);
-        if (cachedColor) applyAccentVars(cachedColor);
-    } catch (error) { }
-})();
+try {
+    const cachedColor = localStorage.getItem(THEME_COLOR_CACHE_KEY);
+    if (cachedColor) applyAccentVars(cachedColor);
+} catch { /* ignore */ }
 
 async function saveThemeColor(color) {
     const normalizedColor = normalizeHexColor(color);
     if (!normalizedColor) return;
-    try {
-        localStorage.setItem(THEME_COLOR_CACHE_KEY, normalizedColor);
-    } catch (error) { }
+    try { localStorage.setItem(THEME_COLOR_CACHE_KEY, normalizedColor); }
+    catch { /* ignore */ }
     try {
         const formData = new FormData();
         formData.append("color", normalizedColor);
         await fetch("/theme/set", { method: "POST", body: formData });
-    } catch (error) { }
+    } catch { /* network errors silently dropped */ }
 }
 
 async function saveThemeMode(theme) {
     const normalizedMode = normalizeThemeMode(theme);
-    try {
-        localStorage.setItem("theme", normalizedMode);
-    } catch (error) { }
+    try { localStorage.setItem("theme", normalizedMode); }
+    catch { /* ignore */ }
     try {
         const formData = new FormData();
         formData.append("theme", normalizedMode);
         await fetch("/theme/set", { method: "POST", body: formData });
-    } catch (error) { }
+    } catch { /* network errors silently dropped */ }
 }
 
 async function loadThemeColor() {
@@ -262,46 +260,41 @@ async function loadThemeColor() {
     let loadedFromEnv = false;
     try {
         const response = await fetch("/theme/get", { method: "GET" });
-        if (response && response.ok) {
+        if (response?.ok) {
             const payload = await response.json();
-            if (payload && payload.color) {
-                currentColor = normalizeHexColor(payload.color);
-                loadedFromEnv = !!currentColor;
-            }
+            currentColor = normalizeHexColor(payload?.color);
+            loadedFromEnv = !!currentColor;
         }
-    } catch (error) { }
+    } catch { /* ignore */ }
 
     if (!currentColor) {
         try {
-            currentColor = (getComputedStyle(document.documentElement).getPropertyValue("--primary") || "").trim();
-            currentColor = normalizeHexColor(currentColor);
-        } catch (error) { }
+            const cssValue = getComputedStyle(document.documentElement).getPropertyValue("--primary") ?? "";
+            currentColor = normalizeHexColor(cssValue.trim());
+        } catch { /* ignore */ }
     }
 
-    if (currentColor) {
-        if (loadedFromEnv) applyAccentColor(currentColor);
-        if (loadedFromEnv) {
-            try {
-                localStorage.setItem(THEME_COLOR_CACHE_KEY, currentColor);
-            } catch (error) { }
-        }
-        updateAccentControls(currentColor);
+    if (!currentColor) return;
+
+    if (loadedFromEnv) {
+        applyAccentColor(currentColor);
+        try { localStorage.setItem(THEME_COLOR_CACHE_KEY, currentColor); }
+        catch { /* ignore */ }
     }
+    updateAccentControls(currentColor);
 }
 
 async function loadThemeMode() {
     let mode = null;
     try {
         const response = await fetch("/theme/get", { method: "GET" });
-        if (response && response.ok) {
+        if (response?.ok) {
             const payload = await response.json();
-            if (payload && payload.theme) mode = normalizeThemeMode(payload.theme);
+            if (payload?.theme) mode = normalizeThemeMode(payload.theme);
         }
-    } catch (error) { }
+    } catch { /* ignore */ }
 
-    if (mode) {
-        setTheme(mode, { persistEnv: false, persistLocal: true, silent: true });
-    }
+    if (mode) setTheme(mode, { persistEnv: false, persistLocal: true, silent: true });
 }
 
 function appendAccentControls(container) {
@@ -320,18 +313,19 @@ function appendAccentControls(container) {
 
     const presets = document.createElement("div");
     presets.className = "color-presets";
-    ACCENT_PRESETS.forEach((presetColor) => {
+    for (const presetColor of ACCENT_PRESETS) {
         const swatchButton = document.createElement("button");
         swatchButton.type = "button";
         swatchButton.className = "color-swatch";
         swatchButton.dataset.color = presetColor.toLowerCase();
         swatchButton.style.backgroundColor = presetColor;
-        swatchButton.onclick = () => {
+        swatchButton.setAttribute("aria-label", `Accent ${presetColor}`);
+        swatchButton.addEventListener("click", () => {
             applyAccentColor(presetColor);
             saveThemeColor(presetColor);
-        };
+        });
         presets.appendChild(swatchButton);
-    });
+    }
 
     const inputs = document.createElement("div");
     inputs.className = "color-inputs";
@@ -374,23 +368,24 @@ function ensureFavicon() {
         link = document.createElement("link");
         link.setAttribute("rel", "icon");
         link.setAttribute("type", "image/svg+xml");
-        link.setAttribute("href", "/favicon.svg");
-        document.head && document.head.appendChild(link);
-    } else {
-        link.setAttribute("href", "/favicon.svg");
+        document.head?.appendChild(link);
     }
+    link.setAttribute("href", "/favicon.svg");
 }
 
 function updateDocumentTitle() {
-    if (!isI18nEnabled() || !isI18nAvailable())
+    if (!isI18nEnabled() || !isI18nAvailable() || !APP_STATE.page) return;
+
+    const titleKey = `${APP_STATE.page}.title`;
+    if (I18N[APP_STATE.lang]?.[titleKey]) {
+        document.title = t(titleKey);
         return;
-    if (APP_STATE.page) {
-        const titleKey = APP_STATE.page + ".title";
-        if (I18N[APP_STATE.lang] && I18N[APP_STATE.lang][titleKey]) {
-            document.title = t(titleKey);
-            return;
-        }
-        APP_STATE.page === "flashing" ? document.title = t("flashing.title.in_progress") : APP_STATE.page === "booting" && (document.title = t("booting.title.in_progress"));
+    }
+
+    if (APP_STATE.page === "flashing") {
+        document.title = t("flashing.title.in_progress");
+    } else if (APP_STATE.page === "booting") {
+        document.title = t("booting.title.in_progress");
     }
 }
 
@@ -399,27 +394,24 @@ function ensureBranding() {
     if (!versionNode) return;
 
     // Remove an existing sibling brand node (if present)
-    try {
-        const nextSiblingNode = versionNode.nextElementSibling;
-        if (nextSiblingNode && nextSiblingNode.classList && nextSiblingNode.classList.contains("brand") && nextSiblingNode.parentNode) {
-            nextSiblingNode.parentNode.removeChild(nextSiblingNode);
-        }
-    } catch (e) { }
+    const nextSibling = versionNode.nextElementSibling;
+    if (nextSibling?.classList?.contains("brand")) {
+        nextSibling.remove();
+    }
 
     // Ensure an inline brand label exists
-    if (versionNode.querySelector && !versionNode.querySelector(".brand-inline")) {
+    if (!versionNode.querySelector?.(".brand-inline")) {
         const brandNode = document.createElement("span");
         brandNode.className = "brand-inline";
         brandNode.textContent = AUTHOR_DISPLAY;
-        versionNode.appendChild(document.createTextNode(" "));
-        versionNode.appendChild(brandNode);
+        versionNode.append(" ", brandNode);
     }
 
     // Ensure project info block exists (don't duplicate)
-    if (versionNode.querySelector && versionNode.querySelector("#project-info")) return;
+    if (versionNode.querySelector?.("#project-info")) return;
     const projectInfo = document.createElement("div");
     projectInfo.id = "project-info";
-    projectInfo.innerHTML = `You can find more infomation about this project: <a href="${PROJECT_REPO_URL}" target="_blank">Github</a>`;
+    projectInfo.innerHTML = `You can find more infomation about this project: <a href="${PROJECT_REPO_URL}" target="_blank" rel="noopener">Github</a>`;
     versionNode.appendChild(projectInfo);
 }
 
@@ -577,21 +569,80 @@ function ensureSidebar() {
     applyI18n(sidebar);
     updateGptNavVisibility();
     updateSimgNavVisibility();
+    attachSidebarScrollPersistence(navContainer);
+}
+
+const SIDEBAR_SCROLL_KEY = "failsafe_sidebar_scroll";
+
+function readSidebarScroll() {
+    try {
+        const raw = sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+        const n = raw === null ? NaN : parseInt(raw, 10);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+    } catch { return 0; }
+}
+
+function writeSidebarScroll(value) {
+    const v = Math.max(0, value | 0);
+    try { sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(v)); }
+    catch { /* quota or disabled — ignore */ }
+}
+
+function attachSidebarScrollPersistence(navContainer) {
+    const targetTop = readSidebarScroll();
+
+    // The nav is the actual scroll container, but on a fresh page its layout
+    // may not be ready immediately. Setting scrollTop before scrollHeight is
+    // populated silently clamps to 0 — so retry across frames until either the
+    // container becomes scrollable, or we give up.
+    let attempts = 0;
+    const tryRestore = () => {
+        if (targetTop <= 0) return;
+        const maxTop = navContainer.scrollHeight - navContainer.clientHeight;
+        if (maxTop > 0) {
+            navContainer.scrollTop = Math.min(targetTop, maxTop);
+            return;
+        }
+        if (attempts++ < 30) requestAnimationFrame(tryRestore);
+    };
+    tryRestore();
+
+    // Save scroll position, throttled via rAF.
+    let rafId = 0;
+    navContainer.addEventListener("scroll", () => {
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => {
+            rafId = 0;
+            writeSidebarScroll(navContainer.scrollTop);
+        });
+    }, { passive: true });
+
+    // Flush the current scroll position synchronously whenever the user is
+    // about to leave the page — the throttled scroll write may not have fired
+    // yet by the time navigation starts.
+    const flush = () => writeSidebarScroll(navContainer.scrollTop);
+
+    // Capture-phase click on links inside the sidebar: runs before the browser
+    // begins navigation, while sessionStorage writes are still guaranteed.
+    navContainer.addEventListener("click", (event) => {
+        if (event.target.closest?.("a")) flush();
+    }, true);
+
+    window.addEventListener("pagehide", flush);
+    // Some embedded browsers fire only beforeunload; cover both.
+    window.addEventListener("beforeunload", flush);
 }
 
 function ajax(request) {
-    let xhr;
-    let method;
-    xhr = window.XMLHttpRequest ? new XMLHttpRequest : new ActiveXObject("Microsoft.XMLHTTP");
-    xhr.upload.addEventListener("progress", function (event) {
-        request.progress && request.progress(event);
+    const xhr = new XMLHttpRequest();
+    xhr.upload.addEventListener("progress", (event) => request.progress?.(event));
+    xhr.addEventListener("readystatechange", () => {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            request.done?.(xhr.responseText);
+        }
     });
-    xhr.onreadystatechange = function () {
-        xhr.readyState == 4 && xhr.status == 200 && request.done && request.done(xhr.responseText);
-    };
-    request.timeout && (xhr.timeout = request.timeout);
-    method = "GET";
-    request.data && (method = "POST");
+    if (request.timeout) xhr.timeout = request.timeout;
+    const method = request.data ? "POST" : "GET";
     xhr.open(method, request.url);
     xhr.send(request.data);
 }
@@ -635,16 +686,16 @@ function appInit(pageName) {
 
 function updateGptNavVisibility() {
     // Hide GPT update entry when no MMC is present (runtime detection).
-    // If backupinfo is unavailable, keep it visible (fallback behavior).
+    // If backupinfo is unavailable, keep it hidden (fail-closed behavior).
     const gptNavLink = document.querySelector("#sidebar [data-nav-id='gpt']");
     if (!gptNavLink) return;
-    const backupInfo = APP_STATE.backupinfo;
-    if (!backupInfo || !backupInfo.mmc || typeof backupInfo.mmc.present === "undefined") {
+    const mmcPresent = APP_STATE.backupinfo?.mmc?.present;
+    if (mmcPresent === undefined) {
         gptNavLink.style.display = "none";
         return;
     }
-    gptNavLink.style.display = backupInfo.mmc.present === false ? "none" : "";
-    console.warn("GPT nav visibility updated based on MMC presence:", backupInfo.mmc.present);
+    gptNavLink.style.display = mmcPresent === false ? "none" : "";
+    console.warn("GPT nav visibility updated based on MMC presence:", mmcPresent);
 }
 
 function updateSimgNavVisibility() {
@@ -657,20 +708,16 @@ function updateSimgNavVisibility() {
     if (APP_STATE._simg_probe_done) return;
     APP_STATE._simg_probe_done = true;
 
-    try {
-        fetch("/simg.html?_probe=1", { method: "GET", cache: "no-store" })
-            .then(function (response) {
-                if (response && response.ok) {
-                    simgNavLink.style.display = "";
-                    return;
-                }
-                console.warn("SIMG probe HTTP status:", response ? response.status : "unknown");
-                console.info("If SIMG feature is not enabled, this warning is expected.");
-            })
-            .catch(function () { });
-    } catch (error) {
-        console.warn("Unexpected error during SIMG probe:", error);
-    }
+    fetch("/simg.html?_probe=1", { method: "GET", cache: "no-store" })
+        .then((response) => {
+            if (response?.ok) {
+                simgNavLink.style.display = "";
+                return;
+            }
+            console.warn("SIMG probe HTTP status:", response?.status ?? "unknown");
+            console.info("If SIMG feature is not enabled, this warning is expected.");
+        })
+        .catch((error) => console.warn("SIMG probe failed:", error));
 }
 
 function renderSysInfo() {
@@ -813,36 +860,33 @@ function getSysInfo() {
     // Always fetch sysinfo into APP_STATE (used by features like backup filename),
     // but only render when the sysinfo element exists on current page.
     const sysinfoElement = document.getElementById("sysinfo");
-    sysinfoElement && renderSysInfo();
+    if (sysinfoElement) renderSysInfo();
     ajax({
         url: "/sysinfo",
-        done: function (responseText) {
+        done: (responseText) => {
             try {
-                APP_STATE.sysinfo = JSON.parse(responseText)
-            } catch (error) {
-                return
+                APP_STATE.sysinfo = JSON.parse(responseText);
+            } catch {
+                return;
             }
-            sysinfoElement && renderSysInfo()
-        }
-    })
+            if (sysinfoElement) renderSysInfo();
+        },
+    });
 }
 
 async function ensureSysInfoLoaded() {
     // On pages without #sysinfo (e.g. backup.html), we still need board model.
-    if (APP_STATE.sysinfo && APP_STATE.sysinfo.board && APP_STATE.sysinfo.board.model)
-        return APP_STATE.sysinfo;
+    if (APP_STATE.sysinfo?.board?.model) return APP_STATE.sysinfo;
+    if (APP_STATE._sysinfo_promise) return APP_STATE._sysinfo_promise;
 
-    if (APP_STATE._sysinfo_promise)
-        return await APP_STATE._sysinfo_promise;
-
-    APP_STATE._sysinfo_promise = (async function () {
+    APP_STATE._sysinfo_promise = (async () => {
         try {
             const response = await fetch("/sysinfo", { method: "GET" });
-            if (!response || !response.ok) return null;
+            if (!response?.ok) return null;
             const payload = await response.json();
-            payload && (APP_STATE.sysinfo = payload);
+            if (payload) APP_STATE.sysinfo = payload;
             return payload;
-        } catch (error) {
+        } catch {
             return null;
         } finally {
             // allow retry later
@@ -850,7 +894,7 @@ async function ensureSysInfoLoaded() {
         }
     })();
 
-    return await APP_STATE._sysinfo_promise;
+    return APP_STATE._sysinfo_promise;
 }
 
 function getStorageInfoForSysinfo() {
@@ -861,13 +905,15 @@ function getStorageInfoForSysinfo() {
     }
     ajax({
         url: "/backup/info",
-        done: function (responseText) {
+        done: (responseText) => {
             try {
                 APP_STATE.backupinfo = JSON.parse(responseText);
-            } catch (error) { return; }
+            } catch {
+                return;
+            }
             updateGptNavVisibility();
             renderSysInfo();
-        }
+        },
     });
 }
 
@@ -875,14 +921,14 @@ function getCurrentMtdLayout() {
     // Get current mtd layout label if multi-layout is enabled
     ajax({
         url: "/getmtdlayout",
-        done: function (resp) {
+        done: (resp) => {
             if (!resp || resp === "error") return;
-            const parts = resp.split(";");
-            if (parts.length > 0 && parts[0]) {
-                APP_STATE.mtd_layout_current = parts[0];
+            const [first] = resp.split(";");
+            if (first) {
+                APP_STATE.mtd_layout_current = first;
                 renderSysInfo();
             }
-        }
+        },
     });
 }
 
@@ -893,123 +939,214 @@ function startup() {
 function getmtdlayoutlist() {
     ajax({
         url: "/getmtdlayout",
-        done: function (responseText) {
-            let layoutNames, currentLayoutElement, chooseLayoutElement, layoutSelect, layoutIndex, layoutContainer;
-            if (responseText != "error" && (layoutNames = responseText.split(";"), currentLayoutElement = document.getElementById("current_mtd_layout"), currentLayoutElement && (currentLayoutElement.innerHTML = t("label.current_mtd") + layoutNames[0]), chooseLayoutElement = document.getElementById("choose_mtd_layout"), chooseLayoutElement && (chooseLayoutElement.textContent = t("label.choose_mtd")), layoutSelect = document.getElementById("mtd_layout_label"), layoutSelect)) {
-                for (layoutSelect.options.length = 0, layoutIndex = 1; layoutIndex < layoutNames.length; layoutIndex++) layoutNames[layoutIndex].length > 0 && layoutSelect.options.add(new Option(layoutNames[layoutIndex], layoutNames[layoutIndex]));
-                layoutContainer = document.getElementById("mtd_layout");
-                layoutContainer && (layoutContainer.style.display = "")
+        done: (responseText) => {
+            if (responseText === "error") return;
+            const layoutNames = responseText.split(";");
+
+            const currentLayoutEl = document.getElementById("current_mtd_layout");
+            if (currentLayoutEl) currentLayoutEl.innerHTML = t("label.current_mtd") + layoutNames[0];
+
+            const chooseLayoutEl = document.getElementById("choose_mtd_layout");
+            if (chooseLayoutEl) chooseLayoutEl.textContent = t("label.choose_mtd");
+
+            const layoutSelect = document.getElementById("mtd_layout_label");
+            if (!layoutSelect) return;
+
+            layoutSelect.options.length = 0;
+            for (let i = 1; i < layoutNames.length; i++) {
+                const name = layoutNames[i];
+                if (name?.length > 0) layoutSelect.options.add(new Option(name, name));
             }
-        }
-    })
+
+            const layoutContainer = document.getElementById("mtd_layout");
+            if (layoutContainer) layoutContainer.style.display = "";
+        },
+    });
 }
 
 function getversion() {
     ajax({
         url: "/version",
-        done: function (versionText) {
+        done: (versionText) => {
             const versionElement = document.getElementById("version");
-            versionElement && (versionElement.innerHTML = versionText);
-            ensureBranding()
-        }
-    })
+            if (versionElement) versionElement.innerHTML = versionText;
+            ensureBranding();
+        },
+    });
 }
 
 function upload(formFieldName) {
     const selectedFile = document.getElementById("file").files[0];
-    let formElement, hintElement, progressBarElement, formData, layoutSelect, layoutIndex, selectedLayoutName;
-    selectedFile && (selectedLayoutName = selectedFile.name || "", formElement = document.getElementById("form"), formElement && (formElement.style.display = "none"), hintElement = document.getElementById("hint"), hintElement && (hintElement.style.display = "none"), progressBarElement = document.getElementById("bar"), progressBarElement && (progressBarElement.style.display = "block"), formData = new FormData, formData.append(formFieldName, selectedFile), layoutSelect = document.getElementById("mtd_layout_label"), layoutSelect && layoutSelect.options.length > 0 && (layoutIndex = layoutSelect.selectedIndex, formData.append("mtd_layout", layoutSelect.options[layoutIndex].value)), ajax({
-                url: "/upload",
-                data: formData,
-                done: function (responseText) {
-                    let responseParts, sizeElement, md5Element, mtdElement, upgradeElement, filenameElement, md5InName, md5Hint, md5Ok, md5Match, md5Class;
-                    responseText == "fail" ? location = "/fail.html" : (responseParts = responseText.split(" "), filenameElement = document.getElementById("filename"), filenameElement && selectedLayoutName && (filenameElement.style.display = "block", filenameElement.innerHTML = `<span class="filename-label">${t("label.file")}</span><span class="filename-value">${selectedLayoutName}</span>`), sizeElement = document.getElementById("size"), sizeElement && (sizeElement.style.display = "block", sizeElement.innerHTML = `${t("label.size")}${responseParts[0]}`), md5Element = document.getElementById("md5"), md5Match = selectedLayoutName ? /(?:^|[._-])md5-([0-9a-fA-F]{32})(?:$|[._-])/.exec(selectedLayoutName) : null, md5InName = md5Match && md5Match[1] ? md5Match[1] : "", md5Element && (md5Element.style.display = "block", md5Ok = responseParts[1] && md5InName && String(responseParts[1]).toLowerCase() === String(md5InName).toLowerCase(), md5Hint = md5InName ? (md5Ok ? t("md5.match") : t("md5.mismatch")) : "", md5Class = md5InName ? (md5Ok ? "md5-ok" : "md5-bad") : "", md5Element.innerHTML = `${t("label.md5")}${responseParts[1]}${md5Hint ? ` <span class="md5-status ${md5Class}">${md5Hint}</span>` : ""}`), mtdElement = document.getElementById("mtd"), mtdElement && responseParts[2] && (mtdElement.style.display = "block", mtdElement.innerHTML = `${t("label.mtd")}${responseParts[2]}`), upgradeElement = document.getElementById("upgrade"), upgradeElement && (upgradeElement.style.display = "block"))
-        },
-        progress: function (progressEvent) {
-            if (progressEvent.total) {
-                const percent = parseInt(progressEvent.loaded / progressEvent.total * 100);
-                const progressElement = document.getElementById("bar");
-                progressElement && (progressElement.style.display = "block", progressElement.style.setProperty("--percent", percent))
+    if (!selectedFile) return;
+
+    const selectedFileName = selectedFile.name || "";
+
+    const formElement = document.getElementById("form");
+    if (formElement) formElement.style.display = "none";
+
+    const hintElement = document.getElementById("hint");
+    if (hintElement) hintElement.style.display = "none";
+
+    const progressBarElement = document.getElementById("bar");
+    if (progressBarElement) progressBarElement.style.display = "block";
+
+    const formData = new FormData();
+    formData.append(formFieldName, selectedFile);
+
+    const layoutSelect = document.getElementById("mtd_layout_label");
+    if (layoutSelect?.options.length > 0) {
+        formData.append("mtd_layout", layoutSelect.options[layoutSelect.selectedIndex].value);
+    }
+
+    ajax({
+        url: "/upload",
+        data: formData,
+        done: (responseText) => {
+            if (responseText === "fail") {
+                location = "/fail.html";
+                return;
             }
-        }
-    }))
+            const [sizeText, md5Text, mtdText] = responseText.split(" ");
+
+            const filenameElement = document.getElementById("filename");
+            if (filenameElement && selectedFileName) {
+                filenameElement.style.display = "block";
+                filenameElement.innerHTML =
+                    `<span class="filename-label">${t("label.file")}</span>` +
+                    `<span class="filename-value">${selectedFileName}</span>`;
+            }
+
+            const sizeElement = document.getElementById("size");
+            if (sizeElement) {
+                sizeElement.style.display = "block";
+                sizeElement.innerHTML = `${t("label.size")}${sizeText}`;
+            }
+
+            const md5Element = document.getElementById("md5");
+            if (md5Element) {
+                const md5Match = selectedFileName
+                    ? /(?:^|[._-])md5-([0-9a-fA-F]{32})(?:$|[._-])/.exec(selectedFileName)
+                    : null;
+                const md5InName = md5Match?.[1] ?? "";
+                const md5Ok = !!(md5Text && md5InName &&
+                    md5Text.toLowerCase() === md5InName.toLowerCase());
+                const md5Hint  = md5InName ? (md5Ok ? t("md5.match") : t("md5.mismatch")) : "";
+                const md5Class = md5InName ? (md5Ok ? "md5-ok" : "md5-bad") : "";
+                md5Element.style.display = "block";
+                md5Element.innerHTML = `${t("label.md5")}${md5Text}` + (
+                    md5Hint ? ` <span class="md5-status ${md5Class}">${md5Hint}</span>` : ""
+                );
+            }
+
+            const mtdElement = document.getElementById("mtd");
+            if (mtdElement && mtdText) {
+                mtdElement.style.display = "block";
+                mtdElement.innerHTML = `${t("label.mtd")}${mtdText}`;
+            }
+
+            const upgradeElement = document.getElementById("upgrade");
+            if (upgradeElement) upgradeElement.style.display = "block";
+        },
+        progress: (progressEvent) => {
+            if (!progressEvent.total) return;
+            const percent = Math.floor(progressEvent.loaded / progressEvent.total * 100);
+            const progressElement = document.getElementById("bar");
+            if (progressElement) {
+                progressElement.style.display = "block";
+                progressElement.style.setProperty("--percent", percent);
+            }
+        },
+    });
 }
 
+const BYTE_UNITS = [
+    { threshold: 1024 ** 3, suffix: " GiB" },
+    { threshold: 1024 ** 2, suffix: " MiB" },
+    { threshold: 1024,      suffix: " KiB" },
+];
+
 function bytesToHuman(bytes) {
-    if (bytes === null || bytes === undefined) return "";
-    const numericBytes = Number(bytes);
-    if (!isFinite(numericBytes) || numericBytes < 0) return "";
-    if (numericBytes >= 1024 * 1024 * 1024) return (numericBytes / (1024 * 1024 * 1024)).toFixed(2) + " GiB";
-    if (numericBytes >= 1024 * 1024) return (numericBytes / (1024 * 1024)).toFixed(2) + " MiB";
-    if (numericBytes >= 1024) return (numericBytes / 1024).toFixed(2) + " KiB";
-    return String(Math.floor(numericBytes)) + " B";
+    if (bytes == null) return "";
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n < 0) return "";
+    for (const { threshold, suffix } of BYTE_UNITS) {
+        if (n >= threshold) return (n / threshold).toFixed(2) + suffix;
+    }
+    return `${Math.floor(n)} B`;
 }
 
 function parseFilenameFromDisposition(dispositionHeader) {
     if (!dispositionHeader) return "";
-    const quotedMatch = /filename\s*=\s*"([^"]+)"/i.exec(dispositionHeader);
-    if (quotedMatch && quotedMatch[1]) return quotedMatch[1];
-    const unquotedMatch = /filename\s*=\s*([^;\s]+)/i.exec(dispositionHeader);
-    if (unquotedMatch && unquotedMatch[1]) return unquotedMatch[1].replace(/^"|"$/g, "");
-    return "";
+    const quoted = /filename\s*=\s*"([^"]+)"/i.exec(dispositionHeader);
+    if (quoted?.[1]) return quoted[1];
+    const unquoted = /filename\s*=\s*([^;\s]+)/i.exec(dispositionHeader);
+    return unquoted?.[1]?.replace(/^"|"$/g, "") ?? "";
 }
 
 function sanitizeFilenameComponent(value) {
-    return value ? String(value).replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) : ""
+    return value
+        ? String(value).replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48)
+        : "";
 }
 
 function getNowYYYYMMDD() {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const day = now.getDate();
-    return String(year) + String(month).padStart(2, "0") + String(day).padStart(2, "0")
+    const year  = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day   = String(now.getDate()).padStart(2, "0");
+    return `${year}${month}${day}`;
 }
 
 function makeBackupDownloadName(originalName) {
-    const boardModel = (APP_STATE.sysinfo && APP_STATE.sysinfo.board && APP_STATE.sysinfo.board.model) ? APP_STATE.sysinfo.board.model : "";
+    const boardModel = APP_STATE.sysinfo?.board?.model ?? "";
     const boardComponent = sanitizeFilenameComponent(boardModel) || "board";
     const dateStamp = getNowYYYYMMDD();
     let downloadName = String(originalName || "backup.bin");
 
     // Ensure it starts with backup_
-    downloadName.indexOf("backup_") === 0 || (downloadName = "backup_" + downloadName.replace(/^_+/, ""));
+    if (!downloadName.startsWith("backup_")) {
+        downloadName = "backup_" + downloadName.replace(/^_+/, "");
+    }
 
     // Insert board right after backup_ if not already
-    downloadName.indexOf("backup_" + boardComponent + "_") === 0 || (downloadName = downloadName.replace(/^backup_/, "backup_" + boardComponent + "_"));
+    if (!downloadName.startsWith(`backup_${boardComponent}_`)) {
+        downloadName = downloadName.replace(/^backup_/, `backup_${boardComponent}_`);
+    }
 
     // Ensure .bin extension
-    /\.[A-Za-z0-9]+$/.test(downloadName) || (downloadName = downloadName + ".bin");
+    if (!/\.[A-Za-z0-9]+$/.test(downloadName)) {
+        downloadName += ".bin";
+    }
 
     // Append date before extension if not already present
-    /_\d{8}\.[A-Za-z0-9]+$/.test(downloadName) || (downloadName = downloadName.replace(/(\.[A-Za-z0-9]+)$/, "_" + dateStamp + "$1"));
+    if (!/_\d{8}\.[A-Za-z0-9]+$/.test(downloadName)) {
+        downloadName = downloadName.replace(/(\.[A-Za-z0-9]+)$/, `_${dateStamp}$1`);
+    }
 
-    return downloadName
+    return downloadName;
 }
+
+const SIZE_SUFFIX_MULTIPLIERS = {
+    "":    1,
+    k:     1024,        kb:  1024,        kib: 1024,
+    m:     1024 ** 2,   mb:  1024 ** 2,   mib: 1024 ** 2,
+    g:     1024 ** 3,   gb:  1024 ** 3,   gib: 1024 ** 3,
+};
 
 function parseUserLen(input) {
     if (!input) return null;
-    input = String(input).trim();
-    if (input === "") return null;
-    const match = /^\s*(0x[0-9a-fA-F]+|\d+)\s*([a-zA-Z]*)\s*$/.exec(input);
+    const trimmed = String(input).trim();
+    if (!trimmed) return null;
+    const match = /^\s*(0x[0-9a-fA-F]+|\d+)\s*([a-zA-Z]*)\s*$/.exec(trimmed);
     if (!match) return null;
+
     const rawNumber = match[1];
-    const suffix = (match[2] || "").toLowerCase();
-    const numericValue = rawNumber.toLowerCase().indexOf("0x") === 0 ? parseInt(rawNumber, 16) : parseInt(rawNumber, 10);
-    if (!isFinite(numericValue) || numericValue < 0) return null;
-    if (!suffix) return numericValue;
-    if (suffix === "k" || suffix === "kb" || suffix === "kib") return Math.floor(numericValue * 1024);
-    if (suffix === "m" || suffix === "mb" || suffix === "mib") return Math.floor(numericValue * 1024 * 1024);
-    if (suffix === "g" || suffix === "gb" || suffix === "gib") return Math.floor(numericValue * 1024 * 1024 * 1024);
-    return null;
-}
+    const suffix    = match[2].toLowerCase();
+    const numericValue = rawNumber.toLowerCase().startsWith("0x")
+        ? parseInt(rawNumber, 16)
+        : parseInt(rawNumber, 10);
+    if (!Number.isFinite(numericValue) || numericValue < 0) return null;
 
-/* flash logic moved to flash_js.js */
-
-/* backup logic moved to backup_js.js */
-
-APP_STATE = {
-    lang: "en",
-    theme: "auto",
-    page: ""
+    const multiplier = SIZE_SUFFIX_MULTIPLIERS[suffix];
+    return multiplier === undefined ? null : Math.floor(numericValue * multiplier);
 }
