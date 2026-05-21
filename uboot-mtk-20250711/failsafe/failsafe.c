@@ -854,26 +854,65 @@ static void style_handler(enum httpd_uri_handler_status status,
 	}
 }
 
+/*
+ * Select JS file name from request URI. If the basename matches a known
+ * JavaScript filename, return it; otherwise fall back to "main.js".
+ */
+static const char *select_js_file(const char *uri)
+{
+	static const char *allowed[] = {
+		"main.js",
+		"i18n.js",
+		"themeloader.js",
+		"backup.js",
+		"console.js",
+		"env.js",
+		"flash.js",
+		NULL
+	};
+	const char *basename;
+	const char *slash_ptr;
+	size_t basename_len;
+	int allowed_index;
+
+	if (!uri || !uri[0])
+		return "main.js";
+
+	slash_ptr = strrchr(uri, '/');
+	basename = slash_ptr ? slash_ptr + 1 : uri;
+
+	/* strip query/hash if present */
+	{
+		const char *query_ptr = strchr(basename, '?');
+		const char *hash_ptr = strchr(basename, '#');
+		const char *end_ptr = basename + strlen(basename);
+
+		if (query_ptr && query_ptr < end_ptr)
+			end_ptr = query_ptr;
+		if (hash_ptr && hash_ptr < end_ptr)
+			end_ptr = hash_ptr;
+
+		basename_len = end_ptr - basename;
+	}
+	if (basename_len == 0)
+		return "main.js";
+
+	for (allowed_index = 0; allowed[allowed_index]; allowed_index++) {
+		if (strlen(allowed[allowed_index]) == basename_len &&
+			strncmp(allowed[allowed_index], basename, basename_len) == 0)
+			return allowed[allowed_index];
+	}
+
+	return "main.js";
+}
+
 static void js_handler(enum httpd_uri_handler_status status,
 	struct httpd_request *request,
 	struct httpd_response *response)
 {
 	if (status == HTTP_CB_NEW) {
 		const char *uri = request && request->urih ? request->urih->uri : NULL;
-		const char *file = "main.js";
-
-		if (uri && strstr(uri, "i18n.js"))
-			file = "i18n.js";
-		else if (uri && strstr(uri, "themeloader.js"))
-			file = "themeloader.js";
-		else if (uri && strstr(uri, "backup.js"))
-			file = "backup.js";
-		else if (uri && strstr(uri, "console.js"))
-			file = "console.js";
-		else if (uri && strstr(uri, "env.js"))
-			file = "env.js";
-		else if (uri && strstr(uri, "flash.js"))
-			file = "flash.js";
+		const char *file = select_js_file(uri);
 
 		output_plain_file(response, file);
 		response->info.content_type = "text/javascript";
