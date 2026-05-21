@@ -109,6 +109,7 @@ function setLang(language) {
     } catch (error) { }
     applyI18n(document);
     typeof backupRefreshI18n == "function" && APP_STATE.page === "backup" && backupRefreshI18n();
+    typeof flashRefreshI18n == "function" && APP_STATE.page === "flash" && flashRefreshI18n();
     typeof renderSysInfo == "function" && renderSysInfo();
     updateDocumentTitle();
 }

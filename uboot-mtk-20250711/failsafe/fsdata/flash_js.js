@@ -256,6 +256,27 @@ function flashGetDeviceNameByStorage(storage) {
     return mtdName || mmcName || "device";
 }
 
+function flashRefreshI18n() {
+    const targetSelect = document.getElementById("flash_target");
+    if (!targetSelect) return;
+
+    for (let optionIndex = 0; optionIndex < targetSelect.options.length; optionIndex++) {
+        const optionElement = targetSelect.options[optionIndex];
+        if (optionElement && optionElement.dataset && optionElement.dataset.i18nKey) {
+            optionElement.textContent = window.t(optionElement.dataset.i18nKey);
+        }
+    }
+
+    for (let optionIndex = 0; optionIndex < targetSelect.options.length; optionIndex++) {
+        const optionElement = targetSelect.options[optionIndex];
+        if (!optionElement || !optionElement.dataset) continue;
+        if (optionElement.dataset.kind === "mtd-full") {
+            const mtdName = optionElement.dataset.mtdName || "";
+            optionElement.textContent = `[MTD] ${window.t("backup.target.full_disk")}${mtdName ? ` (${mtdName})` : ""}${optionElement.dataset.size ? ` (${bytesToHuman(parseInt(optionElement.dataset.size, 10))})` : ""}`;
+        }
+    }
+}
+
 function flashBuildErasePlan() {
     const targetSelect = document.getElementById("flash_target");
     const startInput = document.getElementById("flash_start");
@@ -419,7 +440,7 @@ function flashInit() {
             }
 
             if (targetSelect.options.length > 1) targetSelect.selectedIndex = 1;
-            backupRefreshI18n();
+            flashRefreshI18n();
         }
     });
 }
