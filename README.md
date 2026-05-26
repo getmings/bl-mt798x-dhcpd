@@ -54,10 +54,28 @@ sudo apt install gcc-aarch64-linux-gnu build-essential flex bison libssl-dev dev
 
 ## Build
 
-All models:
+Configure once with:
+
+```bash
+make menuconfig
+```
+
+Then build the current `.config` selection:
 
 ```bash
 make
+```
+
+In `make menuconfig`, you can control whether `make` runs FIP (`build.sh`), ATF (`compile_atf.sh`), and GPT (`generate_gpt.sh`) with:
+
+- `BUILD_FIP`
+- `BUILD_ATF`
+- `BUILD_GPT`
+
+Build every board with the selected version by using:
+
+```bash
+make all
 ```
 
 For help:
@@ -262,7 +280,7 @@ There are two ways to build:
 
 HOW to flash:
 
-1. Use failsafe WEB UI to backup[1*](#ENDNOTE) **all your flash and partitions**, is very **important**!
+1. Use failsafe WEB UI to backup[1*](#endnote) **all your flash and partitions**, is very **important**!
 
 2. Update BL2 in the WEB UI to flash the preloader provided by OpenWrt/ImmortalWrt ubootmod firmware.
 
@@ -270,7 +288,7 @@ HOW to flash:
 
 4. Use Flash Editor in the WEB UI to erase the UBI partition(or use command line: `mtd erase ubi`), this step is only for nand devices.
 
-5. Try upgrade in firmware upgrade page with the OpenWrt/ImmortalWrt ubootmod firmware[2*](#ENDNOTE) [3*](#ENDNOTE), if not work, try next step.
+5. Try upgrade in firmware upgrade page with the OpenWrt/ImmortalWrt ubootmod firmware[2*](#endnote) [3*](#endnote), if not work, try next step.
 
 6. Use failsafe WEB UI Initramfs to boot the OpenWrt/ImmortalWrt ubootmod Initramfs image.
 
@@ -282,7 +300,7 @@ HOW to flash:
 
 1. Use TTL tools to connect to the serial port, and use [MTK UARTBOOT](https://github.com/981213/mtk_uartboot/releases) to ramboot
 
-2. In Web UI, backup all your flash and partitions[1*](#ENDNOTE), is very important!
+2. In Web UI, backup all your flash and partitions[1*](#endnote), is very important!
 
 3. Update U-Boot in the WEB UI and upgrade firmware
 
@@ -358,8 +376,6 @@ You can set `nmbm_enable` environment variable to 0/false/no/off to disable MTK-
 More information about the NMBM enablement can be found in the [unified env-controlled NMBM enablement](./document/unified-env-controlled-NMBM-enablement.md) documentation.
 
 ---
-
-<a id="ENDNOTE"></a>
 
 ## Endnote
 
