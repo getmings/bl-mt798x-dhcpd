@@ -131,6 +131,15 @@ config WEBUI_FAILSAFE_ENV_DEFAULT_GLBTN_KEY
 	  and persist glbtn_key=reset,wps,mesh if glbtn_key does not exist.
 	  Existing glbtn_key values are never overwritten.
 
+config WEBUI_FAILSAFE_UBI
+	bool "Enable UBI volume management"
+	default n
+	select CMD_UBIFS
+	depends on WEBUI_FAILSAFE_ADVANCED && !MTK_BOOTMENU_MMC
+	help
+	  Enable UBI volume management in the failsafe Web UI.
+	  This allows managing UBI volumes on NAND flash devices.
+
 config WEBUI_FAILSAFE_CONSOLE
 	bool "Enable failsafe Web console (DANGEROUS)"
 	select CONSOLE_RECORD

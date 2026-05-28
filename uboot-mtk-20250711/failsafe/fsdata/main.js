@@ -664,6 +664,9 @@ function ensureSidebar() {
     const simgLink = createNavLink("/simg.html", "nav.simg", "simg");
     simgLink.style.display = "none";
     advancedSection.appendChild(simgLink);
+    const ubiLink = createNavLink("/ubi.html", "nav.ubi", "ubi");
+    ubiLink.style.display = "none";
+    advancedSection.appendChild(ubiLink);
     advancedSection.appendChild(createNavLink("/factory.html", "nav.factory", "factory"));
     advancedSection.appendChild(createNavLink("/initramfs.html", "nav.initramfs", "initramfs"));
     navContainer.appendChild(advancedSection);
@@ -920,6 +923,7 @@ function appInit(pageName) {
     pageName === "console" && typeof consoleInit === "function" && consoleInit();
     pageName === "env" && typeof envInit === "function" && envInit()
     pageName === "settings" && typeof settingsInit === "function" && settingsInit();
+    pageName === "ubi" && typeof ubiInit === "function" && ubiInit();
 
     console.log('\n%c Yuzhii0718 ' + UBOOT_VERSION + ' %c ' + GITHUB_USER_URL + ' ', 'color: #fadfa3; background: #030307; padding:5px 0;', 'background: #fadfa3; padding:5px 0;');
 }
@@ -974,6 +978,11 @@ const NAV_VISIBILITY_DEFS = {
         url: "/simg.html",
         logPrefix: "SIMG",
         hiddenReason: "feature not enabled in build config",
+    },
+    ubi: {
+        url: "/ubi.html",
+        logPrefix: "UBI",
+        hiddenReason: "feature not enabled or no NAND flash",
     },
 };
 

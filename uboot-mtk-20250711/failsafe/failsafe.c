@@ -919,6 +919,7 @@ static const char *select_js_file(const char *uri)
 		"env_js.js",
 		"flash_js.js",
 		"settings_js.js",
+		"ubi_js.js",
 		NULL
 	};
 	const char *basename;
@@ -1179,6 +1180,18 @@ int start_web_failsafe(void)
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_SIMG
 	httpd_register_uri_handler(inst, "/simg.html", &html_handler, NULL);
+#endif
+#ifdef CONFIG_WEBUI_FAILSAFE_UBI
+	httpd_register_uri_handler(inst, "/ubi.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi_js.js", &js_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/info", &ubi_info_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/volumes", &ubi_volumes_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/attach", &ubi_attach_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/detach", &ubi_detach_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/create", &ubi_create_vol_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/remove", &ubi_remove_vol_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/rename", &ubi_rename_vol_handler, NULL);
+	httpd_register_uri_handler(inst, "/ubi/mtd_list", &ubi_mtd_list_handler, NULL);
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_FACTORY
 	httpd_register_uri_handler(inst, "/factory.html", &html_handler, NULL);
